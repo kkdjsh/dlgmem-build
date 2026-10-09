@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dlfcn.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#include <mach/vm_map.h>
 #include <mach-o/dyld.h>
 
 mach_port_t g_task = MACH_PORT_NULL;
