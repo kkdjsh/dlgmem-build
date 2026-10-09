@@ -1,0 +1,8 @@
+Package: com.dlgmem.tweak
+Name: DLGMem
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Game memory editor tweak
+Maintainer: kkdjsh
+Author: kkdjsh
+Section: Tweaks
