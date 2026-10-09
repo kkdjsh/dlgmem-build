@@ -224,10 +224,11 @@ static int hook_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void
     int r = orig_sysctlbyname(name, oldp, oldlenp, newp, newlen);
     if (r == 0 && name && strcmp(name, "hw.machine") == 0 && oldp && oldlenp) {
         const char *fake = [fakeMachineModel UTF8String];
-        size_t need = strlen(fake) + 1;
-        if (*oldlenp >= need) {
-            strncpy(oldp, fake, *oldlenp - 1);
-            ((char *)oldp)[*oldlenp - 1] = '\0';
+        if (*oldlenp > 0) {
+            size_t copyLen = strlen(fake);
+            if (copyLen >= *oldlenp) copyLen = *oldlenp - 1;
+            memcpy(oldp, fake, copyLen);
+            ((char *)oldp)[copyLen] = '\0';
         }
     }
     return r;
