@@ -180,10 +180,18 @@ static NSUUID* (*orig_idfv)(id, SEL);
 static NSUUID* hook_idfv(id s, SEL _c) { return gFakeIDFV; }
 
 static NSString* (*orig_model)(id, SEL);
-static NSString* hook_model(id s, SEL _c) { return @"iPhone"; }
+static NSString* hook_model(id s, SEL _c) {
+    return [NSString stringWithUTF8String:gFake.modelName];
+}
 
 static NSString* (*orig_modelName)(id, SEL);
 static NSString* hook_modelName(id s, SEL _c) { return [NSString stringWithUTF8String:gFake.modelName]; }
+
+// hardwareMachine (私有方法，返回机器码如 iPhone15,2)
+static NSString* (*orig_hwMachine)(id, SEL);
+static NSString* hook_hwMachine(id s, SEL _c) {
+    return [NSString stringWithUTF8String:gFake.machine];
+}
 
 static NSString* (*orig_devname)(id, SEL);
 static NSString* hook_devname(id s, SEL _c) { return gFakeDevName; }
@@ -230,6 +238,24 @@ static int hook_uname(struct utsname *u) {
         size_t n = strlen(m);
         if (n < sizeof(u->machine)) {
             memcpy(u->machine, m, n+1);
+        }
+    }
+    return r;
+}
+
+// sysctl() MIB 版本 (CTL_HW, HW_MACHINE = 6)
+#include <sys/sysctl.h>
+static int (*orig_sysctl)(int *, u_int, void *, size_t *, void *, size_t);
+static int hook_sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    int r = orig_sysctl(name, namelen, oldp, oldlenp, newp, newlen);
+    if (r != 0 || !oldp || !oldlenp || namelen < 2) return r;
+    if (name[0] == CTL_HW) {
+        if (name[1] == HW_MACHINE || name[1] == HW_MODEL) {
+            const char *v = gFake.machine;
+            size_t n = strlen(v);
+            if (*oldlenp > n) { memcpy(oldp, v, n+1); *oldlenp = n+1; }
+        } else if (name[1] == HW_CPU_FREQ || name[1] == HW_CPU_FREQ_MAX) {
+            if (*oldlenp >= sizeof(uint64_t)) *(uint64_t *)oldp = gFake.cpuFreq;
         }
     }
     return r;
@@ -313,9 +339,12 @@ static void fly_init(void) {
                         (IMP)hook_sysver, (IMP *)&orig_sysver);
         MSHookMessageEx(objc_getClass("UIDevice"), @selector(systemName),
                         (IMP)hook_sysname, (IMP *)&orig_sysname);
+        MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"hardwareMachine"),
+                        (IMP)hook_hwMachine, (IMP *)&orig_hwMachine);
 
-        // sysctl
+        // sysctl (MIB + byname)
         MSHookFunction((void *)sysctlbyname, (void *)hook_sysctl, (void **)&orig_sysctlbyname);
+        MSHookFunction((void *)sysctl, (void *)hook_sysctl, (void **)&orig_sysctl);
 
         // uname (很多 App 用这个读 machine)
         MSHookFunction((void *)uname, (void *)hook_uname, (void **)&orig_uname);
