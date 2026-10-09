@@ -6,6 +6,7 @@
 #import <objc/runtime.h>
 #import <substrate.h>
 #include <stdlib.h>
+#include <string.h>
 
 // 进程启动时随机生成一组设备指纹
 static NSUUID *fakeIDFV = nil;
