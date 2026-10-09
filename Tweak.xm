@@ -4,6 +4,7 @@
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
 #import <sys/sysctl.h>
+#import <sys/utsname.h>
 #import <objc/runtime.h>
 #import <substrate.h>
 #include <stdlib.h>
@@ -70,11 +71,11 @@ static void showHUD(void) {
     box.layer.cornerRadius = 12;
     [win addSubview:box];
     UILabel *t = [[UILabel alloc] initWithFrame:CGRectMake(0,12,200,30)];
-    t.text = @"Fly"; t.textAlignment = NSTextAlignmentCenter;
+    t.text = @"GOAT新机"; t.textAlignment = NSTextAlignmentCenter;
     t.font = [UIFont boldSystemFontOfSize:18]; t.textColor = [UIColor blackColor];
     [box addSubview:t];
     UILabel *m = [[UILabel alloc] initWithFrame:CGRectMake(0,48,200,30)];
-    m.text = @"资料清理中"; m.textAlignment = NSTextAlignmentCenter;
+    m.text = @"施展魔法"; m.textAlignment = NSTextAlignmentCenter;
     m.font = [UIFont systemFontOfSize:15]; m.textColor = [UIColor blackColor];
     [box addSubview:m];
 }
@@ -193,6 +194,12 @@ static NSString* hook_sysver(id s, SEL _c) { return [NSString stringWithUTF8Stri
 static NSString* (*orig_sysname)(id, SEL);
 static NSString* hook_sysname(id s, SEL _c) { return @"iPhone OS"; }
 
+// NSProcessInfo.operatingSystemVersionString
+static NSString* (*orig_osverstr)(id, SEL);
+static NSString* hook_osverstr(id s, SEL _c) {
+    return [NSString stringWithFormat:@"Version %s (Build 21A355)", gFake.sysVersion];
+}
+
 #pragma mark - sysctl hook (hw.machine / hw.cpufrequency / hw.model)
 
 static int (*orig_sysctlbyname)(const char*, void*, size_t*, void*, size_t);
@@ -214,7 +221,21 @@ static int hook_sysctl(const char *name, void *oldp, size_t *oldlenp, void *newp
     return r;
 }
 
-#pragma mark - 越狱检测绕过
+// uname() hook — 很多 App 用这个而不是 sysctlbyname 读机器型号
+static int (*orig_uname)(struct utsname *);
+static int hook_uname(struct utsname *u) {
+    int r = orig_uname(u);
+    if (r == 0) {
+        const char *m = gFake.machine;
+        size_t n = strlen(m);
+        if (n < sizeof(u->machine)) {
+            memcpy(u->machine, m, n+1);
+        }
+    }
+    return r;
+}
+
+#pragma mark - NSProcessInfo hooks
 
 static NSArray *jailbreakPaths(void) {
     return @[
@@ -295,6 +316,14 @@ static void fly_init(void) {
 
         // sysctl
         MSHookFunction((void *)sysctlbyname, (void *)hook_sysctl, (void **)&orig_sysctlbyname);
+
+        // uname (很多 App 用这个读 machine)
+        MSHookFunction((void *)uname, (void *)hook_uname, (void **)&orig_uname);
+
+        // NSProcessInfo
+        MSHookMessageEx(objc_getClass("NSProcessInfo"),
+                        @selector(operatingSystemVersionString),
+                        (IMP)hook_osverstr, (IMP *)&orig_osverstr);
 
         // 越狱检测绕过
         MSHookMessageEx(objc_getClass("NSFileManager"),
