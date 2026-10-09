@@ -225,7 +225,8 @@ static int hook_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void
         const char *fake = [fakeMachineModel UTF8String];
         size_t need = strlen(fake) + 1;
         if (*oldlenp >= need) {
-            strlcpy(oldp, fake, *oldlenp);
+            strncpy(oldp, fake, *oldlenp - 1);
+            ((char *)oldp)[*oldlenp - 1] = '\0';
         }
     }
     return r;
