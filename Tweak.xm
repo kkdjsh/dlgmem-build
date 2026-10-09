@@ -211,7 +211,7 @@ static NSString* hook_osverstr(id s, SEL _c) {
 #pragma mark - sysctl hook (hw.machine / hw.cpufrequency / hw.model)
 
 static int (*orig_sysctlbyname)(const char*, void*, size_t*, void*, size_t);
-static int hook_sysctl(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+static int hook_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
     int r = orig_sysctlbyname(name, oldp, oldlenp, newp, newlen);
     if (r != 0 || !oldp || !oldlenp) return r;
     if (!name) return r;
@@ -246,7 +246,7 @@ static int hook_uname(struct utsname *u) {
 // sysctl() MIB 版本 (CTL_HW, HW_MACHINE = 6)
 #include <sys/sysctl.h>
 static int (*orig_sysctl)(int *, u_int, void *, size_t *, void *, size_t);
-static int hook_sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+static int hook_sysctl_mib(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
     int r = orig_sysctl(name, namelen, oldp, oldlenp, newp, newlen);
     if (r != 0 || !oldp || !oldlenp || namelen < 2) return r;
     if (name[0] == CTL_HW) {
@@ -254,7 +254,7 @@ static int hook_sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, vo
             const char *v = gFake.machine;
             size_t n = strlen(v);
             if (*oldlenp > n) { memcpy(oldp, v, n+1); *oldlenp = n+1; }
-        } else if (name[1] == HW_CPU_FREQ || name[1] == HW_CPU_FREQ_MAX) {
+        } else if (name[1] == HW_CPU_FREQ) {
             if (*oldlenp >= sizeof(uint64_t)) *(uint64_t *)oldp = gFake.cpuFreq;
         }
     }
@@ -343,8 +343,8 @@ static void fly_init(void) {
                         (IMP)hook_hwMachine, (IMP *)&orig_hwMachine);
 
         // sysctl (MIB + byname)
-        MSHookFunction((void *)sysctlbyname, (void *)hook_sysctl, (void **)&orig_sysctlbyname);
-        MSHookFunction((void *)sysctl, (void *)hook_sysctl, (void **)&orig_sysctl);
+        MSHookFunction((void *)sysctlbyname, (void *)hook_sysctlbyname, (void **)&orig_sysctlbyname);
+        MSHookFunction((void *)sysctl, (void *)hook_sysctl_mib, (void **)&orig_sysctl);
 
         // uname (很多 App 用这个读 machine)
         MSHookFunction((void *)uname, (void *)hook_uname, (void **)&orig_uname);
