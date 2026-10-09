@@ -93,7 +93,7 @@ static void wipeAppData(void) {
 
     // 8) 清空 NSHTTPCookieStorage
     NSHTTPCookieStorage *jar = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-    for (NSHTTPCookie *c in jar.cookies.allObjects) {
+    for (NSHTTPCookie *c in jar.cookies) {
         [jar deleteCookie:c];
     }
 
