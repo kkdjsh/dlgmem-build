@@ -39,7 +39,7 @@ static NSString *const kHandledKey = @"KingHTTP_Handled";
 }
 
 - (void)connection:(NSURLConnection *)conn didReceiveData:(NSData *)data {
-    [self.KingData appendData:data];
+    [self.King_data appendData:data];
     [self.client URLProtocol:self didLoadData:data];
 }
 
