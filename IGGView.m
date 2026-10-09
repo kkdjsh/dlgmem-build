@@ -1,6 +1,7 @@
 // IGGView.m
 #import "IGGView.h"
 #import "DLGMem.h"
+#import "DLGMemUIView.h"
 
 static IGGView *_w;
 
