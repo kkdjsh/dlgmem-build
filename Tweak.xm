@@ -242,30 +242,31 @@ static NSArray *jailbreakPaths(void) {
 }
 
 static bool isJailbreakPath(NSString *p) {
-    for (NSString *j in jailbreakPaths) {
+    NSArray *paths = jailbreakPaths();
+    for (NSString *j in paths) {
         if ([p hasPrefix:j] || [p isEqualToString:j]) return true;
     }
     return false;
 }
 
 static BOOL (*orig_fileExists)(id, SEL, NSString *);
-static BOOL hook_fileExists(id s, SEL _c, NSString *p) {
+static BOOL hook_fileExists(id slf, SEL _c, NSString *p) {
     if (isJailbreakPath(p)) return NO;
-    return orig_fileExists(s, _c, p);
+    return orig_fileExists(slf, _c, p);
 }
 
 static BOOL (*orig_fileExistsIsDir)(id, SEL, NSString *, BOOL *);
-static BOOL hook_fileExistsIsDir(id s, SEL _c, NSString *p, BOOL *isDir) {
+static BOOL hook_fileExistsIsDir(id slf, SEL _c, NSString *p, BOOL *isDir) {
     if (isJailbreakPath(p)) { if (isDir) *isDir = NO; return NO; }
-    return orig_fileExistsIsDir(s, _c, p, isDir);
+    return orig_fileExistsIsDir(slf, _c, p, isDir);
 }
 
 static BOOL (*orig_canOpenURL)(id, SEL, NSURL *);
-static BOOL hook_canOpenURL(id s, SEL _c, NSURL *url) {
-    NSString *s = url.absoluteString;
-    if ([s hasPrefix:@"cydia://"] || [s hasPrefix:@"sileo://"] ||
-        [s hasPrefix:@"zbra://"] || [s hasPrefix:@"filza://"]) return NO;
-    return orig_canOpenURL(s, _c, url);
+static BOOL hook_canOpenURL(id slf, SEL _c, NSURL *url) {
+    NSString *urlStr = url.absoluteString;
+    if ([urlStr hasPrefix:@"cydia://"] || [urlStr hasPrefix:@"sileo://"] ||
+        [urlStr hasPrefix:@"zbra://"] || [urlStr hasPrefix:@"filza://"]) return NO;
+    return orig_canOpenURL(slf, _c, url);
 }
 
 #pragma mark - init
