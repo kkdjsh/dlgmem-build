@@ -1,6 +1,7 @@
 // Tweak.xm — 悬浮按钮 + 点击清理数据后退出 App
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
+#import <Security/Security.h>
 #import <objc/runtime.h>
 #import <substrate.h>
 #include <stdlib.h>
@@ -41,7 +42,7 @@ static void showHUD(void) {
     [box addSubview:m];
 }
 
-// 彻底清理 App 沙盒，让下次启动等于全新安装
+// 彻底清理 App 沙盒 + Keychain + Cookie，让下次启动等于全新安装
 static void wipeAppData(void) {
     NSString *home = NSHomeDirectory();
     NSFileManager *fm = [NSFileManager defaultManager];
@@ -66,16 +67,48 @@ static void wipeAppData(void) {
         }
     }
 
-    // 4) 删除 tmp 下所有内容
+    // 4) 删除 Library/Application Support 下所有内容
+    NSString *appSup = [home stringByAppendingPathComponent:@"Library/Application Support"];
+    for (NSString *f in [fm contentsOfDirectoryAtPath:appSup error:nil]) {
+        [fm removeItemAtPath:[appSup stringByAppendingPathComponent:f] error:nil];
+    }
+
+    // 5) 删除 tmp 下所有内容
     NSString *tmp = NSTemporaryDirectory();
     for (NSString *f in [fm contentsOfDirectoryAtPath:tmp error:nil]) {
         [fm removeItemAtPath:[tmp stringByAppendingPathComponent:f] error:nil];
     }
 
-    // 5) 重置 NSUserDefaults
+    // 6) 重置 NSUserDefaults
     NSString *bundleId = [[NSBundle mainBundle] bundleIdentifier];
     [[NSUserDefaults standardUserDefaults] removePersistentDomainForName:bundleId];
     [[NSUserDefaults standardUserDefaults] synchronize];
+
+    // 7) 清空 iCloud NSUbiquitousKeyValueStore
+    NSUbiquitousKeyValueStore *icloud = [NSUbiquitousKeyValueStore defaultStore];
+    for (NSString *key in [icloud dictionaryRepresentation].allKeys) {
+        [icloud removeObjectForKey:key];
+    }
+    [icloud synchronize];
+
+    // 8) 清空 NSHTTPCookieStorage
+    NSHTTPCookieStorage *jar = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    for (NSHTTPCookie *c in jar.cookies.allObjects) {
+        [jar deleteCookie:c];
+    }
+
+    // 9) 清空 URLCache
+    [[NSURLCache sharedURLCache] removeAllCachedResponses];
+
+    // 10) 清空 Keychain（关键！设备 ID 通常存在这里，且跨重装持久）
+    for (NSString *secClass in @[(__bridge id)kSecClassGenericPassword,
+                                  (__bridge id)kSecClassInternetPassword,
+                                  (__bridge id)kSecClassCertificate,
+                                  (__bridge id)kSecClassKey,
+                                  (__bridge id)kSecClassIdentity]) {
+        NSDictionary *q = @{(__bridge id)kSecClass: secClass};
+        SecItemDelete((__bridge CFDictionaryRef)q);
+    }
 }
 
 // 按钮点击 target
