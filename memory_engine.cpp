@@ -169,12 +169,13 @@ static int scan_all_regions(scan_fn fn, uint64_t val) {
     vm_region_basic_info_64_t info;
     mach_msg_type_number_t cnt;
     int hits = 0;
+    natural_t depth = 0;
     while (1) {
         cnt = VM_REGION_BASIC_INFO_COUNT_64;
-        kern_return_t kr = mach_vm_region_recurse(g_task, &addr, &sz, &cnt,
+        kern_return_t kr = mach_vm_region_recurse(g_task, &addr, &sz, &depth,
                                                   (vm_region_recurse_info_t)&info, &cnt);
         if (kr != KERN_SUCCESS) break;
-        if (info.protection & VM_PROT_READ) {
+        if (info->protection & VM_PROT_READ) {
             hits += fn(addr, sz, val);
         }
         addr += sz;
