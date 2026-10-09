@@ -125,7 +125,7 @@ static void wipeAppData(void) {
 
 #pragma mark - 按钮 target
 
-@interface FlyBtnTarget : NSObject
+@interface FlyBtnTarget : NSObject <UIGestureRecognizerDelegate>
 @end
 @implementation FlyBtnTarget
 - (void)onTap {
@@ -136,16 +136,20 @@ static void wipeAppData(void) {
         exit(0);
     });
 }
-// 拖动悬浮按钮
 - (void)onPan:(UIPanGestureRecognizer *)g {
     UIView *v = g.view;
     CGPoint p = [g translationInView:v.superview];
-    v.center = CGPointMake(v.center.x + p.x, v.center.y + p.y);
+    CGRect f = v.frame;
+    f.origin.x += p.x;
+    f.origin.y += p.y;
+    v.frame = f;
     [g setTranslation:CGPointZero inView:v.superview];
 }
-// 三指点击切换显示/隐藏
 - (void)onTripleTap:(UITapGestureRecognizer *)g {
     flyBtn.hidden = !flyBtn.hidden;
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)o {
+    return YES;
 }
 @end
 static FlyBtnTarget *flyTarget = nil;
@@ -159,26 +163,32 @@ static void addFlyButton(void) {
         if (!win) win = [UIApplication sharedApplication].windows.firstObject;
         if (!win) return;
         if (!flyTarget) flyTarget = [[FlyBtnTarget alloc] init];
-        flyBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+
         CGFloat sz = 60;
-        flyBtn.frame = CGRectMake(win.bounds.size.width - sz - 8,
-                                  win.bounds.size.height/2, sz, sz);
+        flyBtn = [[UIButton alloc] initWithFrame:CGRectMake(win.bounds.size.width - sz - 8,
+                                                            win.bounds.size.height/2, sz, sz)];
         flyBtn.layer.cornerRadius = sz/2;
         flyBtn.clipsToBounds = YES;
-        NSData *imgData = [[NSData alloc] initWithBase64EncodedString:kFlyIconBase64 options:0];
-        if (imgData) [flyBtn setImage:[UIImage imageWithData:imgData] forState:UIControlStateNormal];
-        else { [flyBtn setTitle:@"F" forState:UIControlStateNormal];
-               [flyBtn setBackgroundColor:[UIColor colorWithWhite:0.3 alpha:0.8]]; }
-        [flyBtn addTarget:flyTarget action:@selector(onTap) forControlEvents:UIControlEventTouchUpInside];
+        flyBtn.backgroundColor = [UIColor colorWithWhite:0.2 alpha:0.7];
+        flyBtn.titleLabel.font = [UIFont boldSystemFontOfSize:24];
+        [flyBtn setTitle:@"F" forState:UIControlStateNormal];
+        [flyBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+
+        // 单击
+        UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:flyTarget action:@selector(onTap)];
+        [flyBtn addGestureRecognizer:tap];
         // 拖动
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:flyTarget action:@selector(onPan:)];
+        pan.maximumNumberOfTouches = 1;
         [flyBtn addGestureRecognizer:pan];
+
         [win addSubview:flyBtn];
 
         // 三指点击切换显隐
         UITapGestureRecognizer *triple = [[UITapGestureRecognizer alloc] initWithTarget:flyTarget action:@selector(onTripleTap:)];
         triple.numberOfTouchesRequired = 3;
         triple.cancelsTouchesInView = NO;
+        triple.delegate = flyTarget;
         [win addGestureRecognizer:triple];
     });
 }
