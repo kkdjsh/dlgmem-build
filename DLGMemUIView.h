@@ -57,6 +57,7 @@
 @property (nonatomic, strong) NSMutableArray *chainArray;
 
 + (void)addDLGMemUIViewToWindow:(UIWindow *)window withDelegate:(id<DLGMemUIViewDelegate>)delegate;
++ (void)removeDLGMemUIView;
 + (instancetype)instance;
 - (void)launchDLGMem;
 - (void)doExpand;
