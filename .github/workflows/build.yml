@@ -9,6 +9,7 @@ jobs:
         run: |
           set -e
           sudo xcode-select -s /Applications/Xcode.app
+          brew install ldid
           git clone --depth=1 https://github.com/theos/theos.git /Users/runner/theos
           export THEOS=/Users/runner/theos
           cd $THEOS
