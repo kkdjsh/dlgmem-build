@@ -2,9 +2,45 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <sys/sysctl.h>
 #import <objc/runtime.h>
 #import <substrate.h>
 #include <stdlib.h>
+
+// 进程启动时随机生成一组设备指纹
+static NSUUID *fakeIDFV = nil;
+static NSString *fakeMachineModel = nil;  // hw.machine 用
+static NSString *fakeModelName = nil;     // model 用
+static NSString *fakeDeviceName = nil;
+
+static NSArray *iPhoneModels(void) {
+    return @[
+        @{@"machine": @"iPhone14,5", @"model": @"iPhone"},
+        @{@"machine": @"iPhone14,6", @"model": @"iPhone"},
+        @{@"machine": @"iPhone15,2", @"model": @"iPhone"},
+        @{@"machine": @"iPhone15,3", @"model": @"iPhone"},
+        @{@"machine": @"iPhone16,1", @"model": @"iPhone"},
+        @{@"machine": @"iPhone16,2", @"model": @"iPhone"},
+        @{@"machine": @"iPhone17,1", @"model": @"iPhone"},
+        @{@"machine": @"iPhone17,2", @"model": @"iPhone"},
+    ];
+}
+
+static NSArray *deviceNames(void) {
+    return @[@"iPhone", @"Peter's iPhone", @"Admin iPhone", @"My iPhone",
+             @"iPhone 15 Pro", @"工作手机", @"小李的iPhone"];
+}
+
+static void generateFakeDevice(void) {
+    srand((unsigned int)time(NULL));
+    fakeIDFV = [NSUUID UUID];
+    NSArray *models = iPhoneModels();
+    NSDictionary *m = models[rand() % models.count];
+    fakeMachineModel = m[@"machine"];
+    fakeModelName = m[@"model"];
+    NSArray *names = deviceNames();
+    fakeDeviceName = names[rand() % names.count];
+}
 
 static UIButton *flyBtn = nil;
 static UIWindow *flyHUDWindow = nil;
@@ -165,12 +201,59 @@ static void hook_viewDidAppear(id self, SEL _cmd, BOOL animated) {
     addFlyButton();
 }
 
+// --- Hook UIDevice 设备信息 ---
+static NSUUID* (*orig_idfv)(id, SEL);
+static NSUUID* hook_idfv(id self, SEL _cmd) {
+    return fakeIDFV;
+}
+
+static NSString* (*orig_model)(id, SEL);
+static NSString* hook_model(id self, SEL _cmd) {
+    return fakeModelName;
+}
+
+static NSString* (*orig_devicename)(id, SEL);
+static NSString* hook_devicename(id self, SEL _cmd) {
+    return fakeDeviceName;
+}
+
+// hook sysctlbyname 改 hw.machine
+static int (*orig_sysctlbyname)(const char*, void*, size_t*, void*, size_t);
+static int hook_sysctlbyname(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    int r = orig_sysctlbyname(name, oldp, oldlenp, newp, newlen);
+    if (r == 0 && name && strcmp(name, "hw.machine") == 0 && oldp && oldlenp) {
+        const char *fake = [fakeMachineModel UTF8String];
+        size_t need = strlen(fake) + 1;
+        if (*oldlenp >= need) {
+            strlcpy(oldp, fake, *oldlenp);
+        }
+    }
+    return r;
+}
+
 __attribute__((constructor))
 static void fly_init(void) {
     @autoreleasepool {
+        generateFakeDevice();
+
         MSHookMessageEx(objc_getClass("UIViewController"),
                         @selector(viewDidAppear:),
                         (IMP)hook_viewDidAppear,
                         (IMP *)&orig_viewDidAppear);
+
+        MSHookMessageEx(objc_getClass("UIDevice"),
+                        @selector(identifierForVendor),
+                        (IMP)hook_idfv,
+                        (IMP *)&orig_idfv);
+        MSHookMessageEx(objc_getClass("UIDevice"),
+                        @selector(model),
+                        (IMP)hook_model,
+                        (IMP *)&orig_model);
+        MSHookMessageEx(objc_getClass("UIDevice"),
+                        @selector(name),
+                        (IMP)hook_devicename,
+                        (IMP *)&orig_devicename);
+
+        MSHookFunction((void *)sysctlbyname, (void *)hook_sysctlbyname, (void **)&orig_sysctlbyname);
     }
 }
