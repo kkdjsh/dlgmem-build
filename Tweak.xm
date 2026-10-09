@@ -131,13 +131,21 @@ static void wipeAppData(void) {
 - (void)onTap {
     showHUD();
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2*NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        // 换新设备档案 + 新 IDFV
         pickRandomProfile();
-        // 清沙盒 + Keychain
         wipeAppData();
-        // 退出
         exit(0);
     });
+}
+// 拖动悬浮按钮
+- (void)onPan:(UIPanGestureRecognizer *)g {
+    UIView *v = g.view;
+    CGPoint p = [g translationInView:v.superview];
+    v.center = CGPointMake(v.center.x + p.x, v.center.y + p.y);
+    [g setTranslation:CGPointZero inView:v.superview];
+}
+// 三指点击切换显示/隐藏
+- (void)onTripleTap:(UITapGestureRecognizer *)g {
+    flyBtn.hidden = !flyBtn.hidden;
 }
 @end
 static FlyBtnTarget *flyTarget = nil;
@@ -162,7 +170,16 @@ static void addFlyButton(void) {
         else { [flyBtn setTitle:@"F" forState:UIControlStateNormal];
                [flyBtn setBackgroundColor:[UIColor colorWithWhite:0.3 alpha:0.8]]; }
         [flyBtn addTarget:flyTarget action:@selector(onTap) forControlEvents:UIControlEventTouchUpInside];
+        // 拖动
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:flyTarget action:@selector(onPan:)];
+        [flyBtn addGestureRecognizer:pan];
         [win addSubview:flyBtn];
+
+        // 三指点击切换显隐
+        UITapGestureRecognizer *triple = [[UITapGestureRecognizer alloc] initWithTarget:flyTarget action:@selector(onTripleTap:)];
+        triple.numberOfTouchesRequired = 3;
+        triple.cancelsTouchesInView = NO;
+        [win addGestureRecognizer:triple];
     });
 }
 
@@ -206,6 +223,18 @@ static NSString* hook_sysname(id s, SEL _c) { return @"iPhone OS"; }
 static NSString* (*orig_osverstr)(id, SEL);
 static NSString* hook_osverstr(id s, SEL _c) {
     return [NSString stringWithFormat:@"Version %s (Build 21A355)", gFake.sysVersion];
+}
+
+// hook NSDictionary dictionaryWithContentsOfFile: 拦截 SystemVersion.plist
+static NSDictionary* (*orig_dictWithFile)(id, SEL, NSString*);
+static NSDictionary* hook_dictWithFile(id s, SEL _c, NSString *path) {
+    NSDictionary *d = orig_dictWithFile(s, _c, path);
+    if ([path isEqualToString:@"/System/Library/CoreServices/SystemVersion.plist"]) {
+        NSMutableDictionary *m = [d mutableCopy] ?: [NSMutableDictionary dictionary];
+        m[@"ProductVersion"] = [NSString stringWithUTF8String:gFake.sysVersion];
+        return m;
+    }
+    return d;
 }
 
 #pragma mark - sysctl hook (hw.machine / hw.cpufrequency / hw.model)
@@ -353,6 +382,11 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("NSProcessInfo"),
                         @selector(operatingSystemVersionString),
                         (IMP)hook_osverstr, (IMP *)&orig_osverstr);
+
+        // SystemVersion.plist
+        MSHookMessageEx(objc_getClass("NSDictionary"),
+                        @selector(dictionaryWithContentsOfFile:),
+                        (IMP)hook_dictWithFile, (IMP *)&orig_dictWithFile);
 
         // 越狱检测绕过
         MSHookMessageEx(objc_getClass("NSFileManager"),
