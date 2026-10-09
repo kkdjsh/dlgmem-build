@@ -164,14 +164,14 @@ static void addFlyButton(void) {
         if (!win) return;
         if (!flyTarget) flyTarget = [[FlyBtnTarget alloc] init];
 
-        CGFloat sz = 60;
+        CGFloat sz = 70;
         flyBtn = [[UIButton alloc] initWithFrame:CGRectMake(win.bounds.size.width - sz - 8,
                                                             win.bounds.size.height/2, sz, sz)];
         flyBtn.layer.cornerRadius = sz/2;
         flyBtn.clipsToBounds = YES;
         flyBtn.backgroundColor = [UIColor colorWithWhite:0.2 alpha:0.7];
-        flyBtn.titleLabel.font = [UIFont boldSystemFontOfSize:24];
-        [flyBtn setTitle:@"F" forState:UIControlStateNormal];
+        flyBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+        [flyBtn setTitle:@"GOAT" forState:UIControlStateNormal];
         [flyBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
 
         // 单击
