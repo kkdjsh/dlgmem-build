@@ -6,9 +6,18 @@
 #include <string.h>
 #include <dlfcn.h>
 #include <mach/mach.h>
-#include <mach/mach_vm.h>
-#include <mach/vm_map.h>
 #include <mach-o/dyld.h>
+
+// iOS SDK 不暴露 mach_vm.h，手动声明
+extern "C" kern_return_t mach_vm_read_overwrite(vm_map_read_t target,
+    mach_vm_address_t address, mach_vm_size_t size,
+    mach_vm_address_t data, mach_msg_type_number_t *outsize);
+extern "C" kern_return_t mach_vm_write(vm_map_t target,
+    mach_vm_address_t address, vm_offset_t data, mach_msg_type_number_t size);
+extern "C" kern_return_t mach_vm_region_recurse(vm_map_t target_task,
+    mach_vm_address_t *address, mach_vm_size_t *size,
+    natural_t *nesting_depth,
+    vm_region_recurse_info_t info, mach_msg_type_number_t *infoCnt);
 
 mach_port_t g_task = MACH_PORT_NULL;
 search_result_chain_t *g_chain = NULL;
