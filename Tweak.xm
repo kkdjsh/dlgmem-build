@@ -282,31 +282,6 @@ static int hook_uname(struct utsname *u) {
     return r;
 }
 
-#pragma mark - MobileGestalt MGCopyAnswer hook（核心！）
-
-#include <dlfcn.h>
-typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
-static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
-static CFTypeRef hook_MGCopyAnswer(CFStringRef key) {
-    if (!key) return orig_MGCopyAnswer(key);
-    NSString *k = (__bridge NSString *)key;
-    if ([k isEqualToString:@"ProductType"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
-    }
-    if ([k isEqualToString:@"ProductVersion"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.sysVersion]);
-    }
-    if ([k isEqualToString:@"MarketingName"] || [k isEqualToString:@"DeviceName"] ||
-        [k isEqualToString:@"DeviceModel"] || [k isEqualToString:@"HWModelStr"] ||
-        [k isEqualToString:@"Model"] || [k isEqualToString:@"ModelName"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.modelName]);
-    }
-    if ([k isEqualToString:@"HardwareModel"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
-    }
-    return orig_MGCopyAnswer(key);
-}
-
 // UIDevice deviceInfoForKey: 私有方法
 static id (*orig_deviceInfoForKey)(id, SEL, NSString *);
 static id hook_deviceInfoForKey(id s, SEL _c, NSString *key) {
