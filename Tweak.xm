@@ -320,7 +320,7 @@ static int hook_sysctl_mib(int *name, u_int namelen, void *oldp, size_t *oldlenp
 
 #pragma mark - fishhook hook C 函数（已禁用）
 
-// #import "fishhook.h"
+#import "fishhook.h"
 
 typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
 static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
@@ -377,7 +377,24 @@ static CFTypeRef hook_MGCopyAnswer_fish(CFStringRef key) {
 }
 
 static void doFishhook(void) {
-    // disabled - fishhook not available
+    // sysctlbyname + uname + sysctl
+    struct rebinding rebinds[] = {
+        { "sysctlbyname", (void *)hook_sysctlbyname_fish, (void **)&real_sysctlbyname },
+        { "uname", (void *)hook_uname_fish, (void **)&real_uname },
+        { "sysctl", (void *)hook_sysctl_fish, (void **)&real_sysctl },
+    };
+    rebind_symbols(rebinds, 3);
+
+    // MGCopyAnswer
+    void *h = dlopen("/System/Library/PrivateFrameworks/MobileGestalt.framework/MobileGestalt", RTLD_NOW);
+    if (!h) h = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW);
+    if (h) {
+        MGCopyAnswer_t mg = (MGCopyAnswer_t)dlsym(h, "MGCopyAnswer");
+        if (mg) {
+            struct rebinding r = { "MGCopyAnswer", (void *)hook_MGCopyAnswer_fish, (void **)&orig_MGCopyAnswer };
+            rebind_symbols(&r, 1);
+        }
+    }
 }
 
 #pragma mark - NSProcessInfo hooks
@@ -461,8 +478,7 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"hardwareMachine"),
                         (IMP)hook_hwMachine, (IMP *)&orig_hwMachine);
 
-        // fishhook C function hooks disabled (non-jailbroken)
-        // doFishhook();
+        doFishhook();
 
         // NSProcessInfo
         MSHookMessageEx(objc_getClass("NSProcessInfo"),
