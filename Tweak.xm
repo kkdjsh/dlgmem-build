@@ -327,6 +327,7 @@ static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
 
 static int (*real_sysctlbyname)(const char*, void*, size_t*, void*, size_t);
 static int hook_sysctlbyname_fish(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    if (!real_sysctlbyname) return -1;
     int r = real_sysctlbyname(name, oldp, oldlenp, newp, newlen);
     if (r != 0 || !oldp || !oldlenp) return r;
     if (!name) return r;
@@ -334,14 +335,13 @@ static int hook_sysctlbyname_fish(const char *name, void *oldp, size_t *oldlenp,
         const char *v = gFake.machine;
         size_t n = strlen(v);
         if (*oldlenp > n) { memcpy(oldp, v, n+1); *oldlenp = n+1; }
-    } else if (strcmp(name, "hw.cpufrequency") == 0 || strcmp(name, "hw.cpufrequency_max") == 0) {
-        if (*oldlenp >= sizeof(uint64_t)) *(uint64_t *)oldp = gFake.cpuFreq;
     }
     return r;
 }
 
 static int (*real_uname)(struct utsname *);
 static int hook_uname_fish(struct utsname *u) {
+    if (!real_uname) return -1;
     int r = real_uname(u);
     if (r == 0) {
         const char *m = gFake.machine;
@@ -357,22 +357,8 @@ static int hook_sysctl_fish(int *name, u_int namelen, void *oldp, size_t *oldlen
 }
 
 static CFTypeRef hook_MGCopyAnswer_fish(CFStringRef key) {
+    if (!orig_MGCopyAnswer) return NULL;
     if (!key) return orig_MGCopyAnswer(key);
-    NSString *k = (__bridge NSString *)key;
-    if ([k isEqualToString:@"ProductType"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
-    }
-    if ([k isEqualToString:@"ProductVersion"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.sysVersion]);
-    }
-    if ([k isEqualToString:@"MarketingName"] || [k isEqualToString:@"DeviceName"] ||
-        [k isEqualToString:@"DeviceModel"] || [k isEqualToString:@"HWModelStr"] ||
-        [k isEqualToString:@"Model"] || [k isEqualToString:@"ModelName"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.modelName]);
-    }
-    if ([k isEqualToString:@"HardwareModel"]) {
-        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
-    }
     return orig_MGCopyAnswer(key);
 }
 
@@ -381,9 +367,8 @@ static void doFishhook(void) {
     struct rebinding rebinds[] = {
         { "sysctlbyname", (void *)hook_sysctlbyname_fish, (void **)&real_sysctlbyname },
         { "uname", (void *)hook_uname_fish, (void **)&real_uname },
-        { "sysctl", (void *)hook_sysctl_fish, (void **)&real_sysctl },
     };
-    rebind_symbols(rebinds, 3);
+    rebind_symbols(rebinds, 2);
 
     // MGCopyAnswer
     void *h = dlopen("/System/Library/PrivateFrameworks/MobileGestalt.framework/MobileGestalt", RTLD_NOW);
