@@ -341,6 +341,84 @@ static int hook_sysctl_mib(int *name, u_int namelen, void *oldp, size_t *oldlenp
     return r;
 }
 
+#pragma mark - fishhook hook C 函数（非越狱环境必须用 fishhook）
+
+#import "fishhook.h"
+
+typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
+static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
+
+static int (*real_sysctlbyname)(const char*, void*, size_t*, void*, size_t);
+static int hook_sysctlbyname_fish(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    int r = real_sysctlbyname(name, oldp, oldlenp, newp, newlen);
+    if (r != 0 || !oldp || !oldlenp) return r;
+    if (!name) return r;
+    if (strcmp(name, "hw.machine") == 0 || strcmp(name, "hw.model") == 0) {
+        const char *v = gFake.machine;
+        size_t n = strlen(v);
+        if (*oldlenp > n) { memcpy(oldp, v, n+1); *oldlenp = n+1; }
+    } else if (strcmp(name, "hw.cpufrequency") == 0 || strcmp(name, "hw.cpufrequency_max") == 0) {
+        if (*oldlenp >= sizeof(uint64_t)) *(uint64_t *)oldp = gFake.cpuFreq;
+    }
+    return r;
+}
+
+static int (*real_uname)(struct utsname *);
+static int hook_uname_fish(struct utsname *u) {
+    int r = real_uname(u);
+    if (r == 0) {
+        const char *m = gFake.machine;
+        size_t n = strlen(m);
+        if (n < sizeof(u->machine)) memcpy(u->machine, m, n+1);
+    }
+    return r;
+}
+
+static int (*real_sysctl)(int *, u_int, void *, size_t *, void *, size_t);
+static int hook_sysctl_fish(int *name, u_int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
+    return hook_sysctl_mib(name, namelen, oldp, oldlenp, newp, newlen);
+}
+
+static CFTypeRef hook_MGCopyAnswer_fish(CFStringRef key) {
+    if (!key) return orig_MGCopyAnswer(key);
+    NSString *k = (__bridge NSString *)key;
+    if ([k isEqualToString:@"ProductType"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
+    }
+    if ([k isEqualToString:@"ProductVersion"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.sysVersion]);
+    }
+    if ([k isEqualToString:@"MarketingName"] || [k isEqualToString:@"DeviceName"] ||
+        [k isEqualToString:@"DeviceModel"] || [k isEqualToString:@"HWModelStr"] ||
+        [k isEqualToString:@"Model"] || [k isEqualToString:@"ModelName"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.modelName]);
+    }
+    if ([k isEqualToString:@"HardwareModel"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
+    }
+    return orig_MGCopyAnswer(key);
+}
+
+static void doFishhook(void) {
+    // MGCopyAnswer
+    MGCopyAnswer_t mg = NULL;
+    void *h = dlopen("/System/Library/PrivateFrameworks/MobileGestalt.framework/MobileGestalt", RTLD_NOW);
+    if (h) mg = (MGCopyAnswer_t)dlsym(h, "MGCopyAnswer");
+    if (!h) { h = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW); mg = (MGCopyAnswer_t)dlsym(h, "MGCopyAnswer"); }
+
+    struct rebinding rebinds[] = {
+        { "sysctlbyname", (void *)hook_sysctlbyname_fish, (void **)&real_sysctlbyname },
+        { "uname", (void *)hook_uname_fish, (void **)&real_uname },
+        { "sysctl", (void *)hook_sysctl_fish, (void **)&real_sysctl },
+    };
+    rebind_symbols(rebinds, 3);
+
+    if (mg) {
+        struct rebinding mgrebind = { "MGCopyAnswer", (void *)hook_MGCopyAnswer_fish, (void **)&orig_MGCopyAnswer };
+        rebind_symbols(&mgrebind, 1);
+    }
+}
+
 #pragma mark - NSProcessInfo hooks
 
 static NSArray *jailbreakPaths(void) {
@@ -422,24 +500,8 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"hardwareMachine"),
                         (IMP)hook_hwMachine, (IMP *)&orig_hwMachine);
 
-        // sysctl (MIB + byname)
-        MSHookFunction((void *)sysctlbyname, (void *)hook_sysctlbyname, (void **)&orig_sysctlbyname);
-        MSHookFunction((void *)sysctl, (void *)hook_sysctl_mib, (void **)&orig_sysctl);
-
-        // uname (很多 App 用这个读 machine)
-        MSHookFunction((void *)uname, (void *)hook_uname, (void **)&orig_uname);
-
-        // MobileGestalt MGCopyAnswer —— iOS 所有设备信息最终入口
-        void *mgHandle = dlopen("/System/Library/PrivateFrameworks/MobileGestalt.framework/MobileGestalt", RTLD_NOW);
-        if (!mgHandle) mgHandle = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW);
-        MGCopyAnswer_t mg = (MGCopyAnswer_t)(mgHandle ? dlsym(mgHandle, "MGCopyAnswer") : dlsym(RTLD_DEFAULT, "MGCopyAnswer"));
-        if (mg) {
-            MSHookFunction((void *)mg, (void *)hook_MGCopyAnswer, (void **)&orig_MGCopyAnswer);
-        }
-
-        // UIDevice deviceInfoForKey: 私有方法
-        MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"deviceInfoForKey:"),
-                        (IMP)hook_deviceInfoForKey, (IMP *)&orig_deviceInfoForKey);
+        // sysctl + uname + MGCopyAnswer via fishhook（非越狱环境必须用 fishhook）
+        doFishhook();
 
         // NSProcessInfo
         MSHookMessageEx(objc_getClass("NSProcessInfo"),
