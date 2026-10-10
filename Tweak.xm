@@ -43,13 +43,34 @@ static DeviceProfile gFake;
 static NSUUID *gFakeIDFV = nil;
 static NSString *gFakeDevName = nil;
 
+static NSString *profilePath(void) {
+    return [NSHomeDirectory() stringByAppendingPathComponent:@"Library/GOAT_profile.idx"];
+}
+
+static int loadSavedProfileIndex(void) {
+    NSString *s = [NSString stringWithContentsOfFile:profilePath() encoding:NSUTF8StringEncoding error:nil];
+    if (s) return s.intValue;
+    return 0;
+}
+
+static void saveProfileIndex(int i) {
+    [@(i) description] ?: @(i);
+    [[@(i) stringValue] writeToFile:profilePath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
+}
+
 static void pickRandomProfile(void) {
-    // 固定种子，每次启动拿到同一套档案，不随时间变
-    srand(42);
     int i = rand() % kProfileCount;
+    saveProfileIndex(i);
     gFake = kProfiles[i];
     gFakeIDFV = [NSUUID UUID];
     gFakeDevName = [NSString stringWithUTF8String:kDeviceNames[rand() % kDeviceNameCount]];
+}
+
+static void loadSavedProfile(void) {
+    int i = loadSavedProfileIndex();
+    gFake = kProfiles[i];
+    gFakeIDFV = [NSUUID UUID];
+    gFakeDevName = [NSString stringWithUTF8String:kDeviceNames[i % kDeviceNameCount]];
 }
 
 #pragma mark - 悬浮按钮
@@ -421,11 +442,16 @@ static BOOL hook_canOpenURL(id slf, SEL _c, NSURL *url) {
 
 #pragma mark - init
 
+static void hook_noop_void(id slf, SEL _cmd) {
+    // do nothing — 屏蔽震动
+}
+
 __attribute__((constructor))
 static void fly_init(void) {
     @autoreleasepool {
-        // 启动时先抽一套档案（本次进程固定，点按钮后才换新）
-        pickRandomProfile();
+        // 启动时读取上次保存的设备档案，不随机换
+        srand((unsigned)time(nil));
+        loadSavedProfile();
 
         MSHookMessageEx(objc_getClass("UIViewController"),
                         @selector(viewDidAppear:),
@@ -467,5 +493,26 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("UIApplication"),
                         @selector(canOpenURL:),
                         (IMP)hook_canOpenURL, (IMP *)&orig_canOpenURL);
+
+        // 屏蔽震动：hook 所有反馈生成器的触发方法
+        for (NSString *cls in @[@"UIImpactFeedbackGenerator",
+                                @"UINotificationFeedbackGenerator",
+                                @"UISelectionFeedbackGenerator",
+                                @"UIFeedbackGenerator"]) {
+            Class c = objc_getClass(cls.UTF8String);
+            if (!c) continue;
+            for (NSString *sel in @[@"prepare", @"impactOccurred", @"notificationOccurred:",
+                                     @"selectionChanged", @"prepareWithGenerator:" ,@"_playFeedback"]) {
+                SEL s = NSSelectorFromString(sel);
+                if ([c instancesRespondToSelector:s]) {
+                    MSHookMessageEx(c, s, (IMP)hook_noop_void, NULL);
+                }
+            }
+        }
+        // 屏蔽老震动 AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+        Class dvc = objc_getClass("UIDevice");
+        if (dvc) {
+            MSHookMessageEx(dvc, NSSelectorFromString(@"playInputClick"), (IMP)hook_noop_void, NULL);
+        }
     }
 }
