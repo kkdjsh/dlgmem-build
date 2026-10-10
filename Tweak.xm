@@ -318,9 +318,9 @@ static int hook_sysctl_mib(int *name, u_int namelen, void *oldp, size_t *oldlenp
     return r;
 }
 
-#pragma mark - fishhook hook C 函数（非越狱环境必须用 fishhook）
+#pragma mark - fishhook hook C 函数（已禁用）
 
-#import "fishhook.h"
+// #import "fishhook.h"
 
 typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
 static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
@@ -477,8 +477,8 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"hardwareMachine"),
                         (IMP)hook_hwMachine, (IMP *)&orig_hwMachine);
 
-        // sysctl + uname + MGCopyAnswer via fishhook（非越狱环境必须用 fishhook）
-        doFishhook();
+        // fishhook C function hooks disabled (non-jailbroken)
+        // doFishhook();
 
         // NSProcessInfo
         MSHookMessageEx(objc_getClass("NSProcessInfo"),
