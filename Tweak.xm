@@ -430,7 +430,9 @@ static void fly_init(void) {
         MSHookFunction((void *)uname, (void *)hook_uname, (void **)&orig_uname);
 
         // MobileGestalt MGCopyAnswer —— iOS 所有设备信息最终入口
-        MGCopyAnswer_t mg = (MGCopyAnswer_t)dlsym(RTLD_DEFAULT, "MGCopyAnswer");
+        void *mgHandle = dlopen("/System/Library/PrivateFrameworks/MobileGestalt.framework/MobileGestalt", RTLD_NOW);
+        if (!mgHandle) mgHandle = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW);
+        MGCopyAnswer_t mg = (MGCopyAnswer_t)(mgHandle ? dlsym(mgHandle, "MGCopyAnswer") : dlsym(RTLD_DEFAULT, "MGCopyAnswer"));
         if (mg) {
             MSHookFunction((void *)mg, (void *)hook_MGCopyAnswer, (void **)&orig_MGCopyAnswer);
         }
