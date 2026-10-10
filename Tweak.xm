@@ -44,7 +44,8 @@ static NSUUID *gFakeIDFV = nil;
 static NSString *gFakeDevName = nil;
 
 static void pickRandomProfile(void) {
-    srand((unsigned)time(NULL) ^ (unsigned)mach_absolute_time());
+    // 固定种子，每次启动拿到同一套档案，不随时间变
+    srand(42);
     int i = rand() % kProfileCount;
     gFake = kProfiles[i];
     gFakeIDFV = [NSUUID UUID];
