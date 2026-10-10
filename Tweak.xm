@@ -341,7 +341,7 @@ static int hook_sysctl_mib(int *name, u_int namelen, void *oldp, size_t *oldlenp
 
 #pragma mark - fishhook hook C 函数（已禁用）
 
-#import "fishhook.h"
+// #import "fishhook.h"
 
 typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
 static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
@@ -383,18 +383,7 @@ static CFTypeRef hook_MGCopyAnswer_fish(CFStringRef key) {
     return orig_MGCopyAnswer(key);
 }
 
-static void (*orig_AudioServicesPlaySystemSound)(uint32_t);
-static void hook_AudioServicesPlaySystemSound(uint32_t s) {
-    if (s == 0x00000FFF) return; // kSystemSoundID_Vibrate
-    orig_AudioServicesPlaySystemSound(s);
-}
-
-static void doFishhook(void) {
-    struct rebinding r = { "AudioServicesPlaySystemSound",
-                            (void *)hook_AudioServicesPlaySystemSound,
-                            (void **)&orig_AudioServicesPlaySystemSound };
-    rebind_symbols(&r, 1);
-}
+static void doFishhook(void) { }
 
 #pragma mark - NSProcessInfo hooks
 
@@ -481,7 +470,7 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"hardwareMachine"),
                         (IMP)hook_hwMachine, (IMP *)&orig_hwMachine);
 
-        doFishhook();
+        // doFishhook();
 
         // NSProcessInfo
         MSHookMessageEx(objc_getClass("NSProcessInfo"),
