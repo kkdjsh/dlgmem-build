@@ -442,9 +442,8 @@ static BOOL hook_canOpenURL(id slf, SEL _c, NSURL *url) {
 
 #pragma mark - init
 
-static void hook_noop_void(id slf, SEL _cmd) {
-    // do nothing — 屏蔽震动
-}
+static void hook_noop_void(id slf, SEL _cmd) { }
+static id hook_noop_nil(id slf, SEL _cmd) { return nil; }
 
 __attribute__((constructor))
 static void fly_init(void) {
@@ -498,21 +497,34 @@ static void fly_init(void) {
         for (NSString *cls in @[@"UIImpactFeedbackGenerator",
                                 @"UINotificationFeedbackGenerator",
                                 @"UISelectionFeedbackGenerator",
-                                @"UIFeedbackGenerator"]) {
+                                @"UIFeedbackGenerator",
+                                @"_UIFeedbackGeneratorEngine"]) {
             Class c = objc_getClass(cls.UTF8String);
             if (!c) continue;
             for (NSString *sel in @[@"prepare", @"impactOccurred", @"notificationOccurred:",
-                                     @"selectionChanged", @"prepareWithGenerator:" ,@"_playFeedback"]) {
+                                     @"selectionChanged", @"prepareWithGenerator:",
+                                     @"_playFeedback", @"_activate", @"deactivate"]) {
                 SEL s = NSSelectorFromString(sel);
                 if ([c instancesRespondToSelector:s]) {
                     MSHookMessageEx(c, s, (IMP)hook_noop_void, NULL);
                 }
             }
         }
-        // 屏蔽老震动 AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+        // 屏蔽老震动
         Class dvc = objc_getClass("UIDevice");
         if (dvc) {
-            MSHookMessageEx(dvc, NSSelectorFromString(@"playInputClick"), (IMP)hook_noop_void, NULL);
+            for (NSString *sel in @[@"playInputClick", @"vibrate", @"_playVibration",
+                                      @"setVibrationEnabled:", @"playVibrationPattern:"]) {
+                SEL s = NSSelectorFromString(sel);
+                if ([dvc instancesRespondToSelector:s]) {
+                    MSHookMessageEx(dvc, s, (IMP)hook_noop_void, NULL);
+                }
+            }
+        }
+        // 屏蔽通知震动
+        Class ns = objc_getClass("UNNotificationSound");
+        if (ns) {
+            MSHookMessageEx(ns, @selector(defaultSound), (IMP)hook_noop_nil, NULL);
         }
     }
 }
