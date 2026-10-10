@@ -9,6 +9,7 @@
 #import <substrate.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dlfcn.h>
 
 #pragma mark - 设备档案库（型号/系统/CPU 配套）
 
