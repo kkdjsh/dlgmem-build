@@ -377,23 +377,7 @@ static CFTypeRef hook_MGCopyAnswer_fish(CFStringRef key) {
 }
 
 static void doFishhook(void) {
-    // MGCopyAnswer
-    MGCopyAnswer_t mg = NULL;
-    void *h = dlopen("/System/Library/PrivateFrameworks/MobileGestalt.framework/MobileGestalt", RTLD_NOW);
-    if (h) mg = (MGCopyAnswer_t)dlsym(h, "MGCopyAnswer");
-    if (!h) { h = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW); mg = (MGCopyAnswer_t)dlsym(h, "MGCopyAnswer"); }
-
-    struct rebinding rebinds[] = {
-        { "sysctlbyname", (void *)hook_sysctlbyname_fish, (void **)&real_sysctlbyname },
-        { "uname", (void *)hook_uname_fish, (void **)&real_uname },
-        { "sysctl", (void *)hook_sysctl_fish, (void **)&real_sysctl },
-    };
-    rebind_symbols(rebinds, 3);
-
-    if (mg) {
-        struct rebinding mgrebind = { "MGCopyAnswer", (void *)hook_MGCopyAnswer_fish, (void **)&orig_MGCopyAnswer };
-        rebind_symbols(&mgrebind, 1);
-    }
+    // disabled - fishhook not available
 }
 
 #pragma mark - NSProcessInfo hooks
