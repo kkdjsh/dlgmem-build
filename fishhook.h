@@ -1,8 +1,6 @@
-// fishhook.h
-#ifndef FISHHOOK_H
-#define FISHHOOK_H
-#include <sys/types.h>
-#include <mach/mach.h>
+#ifndef fishhook_h
+#define fishhook_h
+#include <stddef.h>
 
 struct rebinding {
     const char *name;
@@ -10,6 +8,7 @@ struct rebinding {
     void **replaced;
 };
 
+#ifdef __cplusplus
 extern "C" {
 #endif
 
