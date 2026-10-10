@@ -282,6 +282,46 @@ static int hook_uname(struct utsname *u) {
     return r;
 }
 
+#pragma mark - MobileGestalt MGCopyAnswer hook（核心！）
+
+extern CFTypeRef MGCopyAnswer(CFStringRef key);
+static CFTypeRef (*orig_MGCopyAnswer)(CFStringRef);
+static CFTypeRef hook_MGCopyAnswer(CFStringRef key) {
+    if (!key) return orig_MGCopyAnswer(key);
+    NSString *k = (__bridge NSString *)key;
+    if ([k isEqualToString:@"ProductType"] || [k isEqualToString:@"ProductVersion"]) {
+        if ([k isEqualToString:@"ProductType"])
+            return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
+        else
+            return CFBridgingRetain([NSString stringWithUTF8String:gFake.sysVersion]);
+    }
+    if ([k isEqualToString:@"MarketingName"] || [k isEqualToString:@"DeviceName"] ||
+        [k isEqualToString:@"DeviceModel"] || [k isEqualToString:@"HWModelStr"] ||
+        [k isEqualToString:@"Model"] || [k isEqualToString:@"ModelName"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.modelName]);
+    }
+    if ([k isEqualToString:@"HardwareModel"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
+    }
+    return orig_MGCopyAnswer(key);
+}
+
+// UIDevice deviceInfoForKey: 私有方法
+static id (*orig_deviceInfoForKey)(id, SEL, NSString *);
+static id hook_deviceInfoForKey(id s, SEL _c, NSString *key) {
+    if ([key isEqualToString:@"marketing-name"] || [key isEqualToString:@"MarketingName"]) {
+        return [NSString stringWithUTF8String:gFake.modelName];
+    }
+    if ([key isEqualToString:@"product-type"] || [key isEqualToString:@"ProductType"] ||
+        [key isEqualToString:@"HardwareModel"]) {
+        return [NSString stringWithUTF8String:gFake.machine];
+    }
+    if ([key isEqualToString:@"product-version"] || [key isEqualToString:@"ProductVersion"]) {
+        return [NSString stringWithUTF8String:gFake.sysVersion];
+    }
+    return orig_deviceInfoForKey(s, _c, key);
+}
+
 // sysctl() MIB 版本 (CTL_HW, HW_MACHINE = 6)
 #include <sys/sysctl.h>
 static int (*orig_sysctl)(int *, u_int, void *, size_t *, void *, size_t);
@@ -387,6 +427,13 @@ static void fly_init(void) {
 
         // uname (很多 App 用这个读 machine)
         MSHookFunction((void *)uname, (void *)hook_uname, (void **)&orig_uname);
+
+        // MobileGestalt MGCopyAnswer —— iOS 所有设备信息最终入口
+        MSHookFunction((void *)MGCopyAnswer, (void *)hook_MGCopyAnswer, (void **)&orig_MGCopyAnswer);
+
+        // UIDevice deviceInfoForKey: 私有方法
+        MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"deviceInfoForKey:"),
+                        (IMP)hook_deviceInfoForKey, (IMP *)&orig_deviceInfoForKey);
 
         // NSProcessInfo
         MSHookMessageEx(objc_getClass("NSProcessInfo"),
