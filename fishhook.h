@@ -10,7 +10,13 @@ struct rebinding {
     void **replaced;
 };
 
-extern int rebind_symbols(struct rebinding rebindings[], size_t rebindings_nel);
-extern int rebind_symbols_image(void *header, size_t size, struct rebinding rebindings[], size_t rebindings_nel);
+extern "C" {
+#endif
+
+int rebind_symbols(struct rebinding rebindings[], size_t rebindings_nel);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
