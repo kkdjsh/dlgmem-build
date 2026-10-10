@@ -284,16 +284,17 @@ static int hook_uname(struct utsname *u) {
 
 #pragma mark - MobileGestalt MGCopyAnswer hook（核心！）
 
-extern CFTypeRef MGCopyAnswer(CFStringRef key);
-static CFTypeRef (*orig_MGCopyAnswer)(CFStringRef);
+#include <dlfcn.h>
+typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
+static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
 static CFTypeRef hook_MGCopyAnswer(CFStringRef key) {
     if (!key) return orig_MGCopyAnswer(key);
     NSString *k = (__bridge NSString *)key;
-    if ([k isEqualToString:@"ProductType"] || [k isEqualToString:@"ProductVersion"]) {
-        if ([k isEqualToString:@"ProductType"])
-            return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
-        else
-            return CFBridgingRetain([NSString stringWithUTF8String:gFake.sysVersion]);
+    if ([k isEqualToString:@"ProductType"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.machine]);
+    }
+    if ([k isEqualToString:@"ProductVersion"]) {
+        return CFBridgingRetain([NSString stringWithUTF8String:gFake.sysVersion]);
     }
     if ([k isEqualToString:@"MarketingName"] || [k isEqualToString:@"DeviceName"] ||
         [k isEqualToString:@"DeviceModel"] || [k isEqualToString:@"HWModelStr"] ||
@@ -429,7 +430,10 @@ static void fly_init(void) {
         MSHookFunction((void *)uname, (void *)hook_uname, (void **)&orig_uname);
 
         // MobileGestalt MGCopyAnswer —— iOS 所有设备信息最终入口
-        MSHookFunction((void *)MGCopyAnswer, (void *)hook_MGCopyAnswer, (void **)&orig_MGCopyAnswer);
+        MGCopyAnswer_t mg = (MGCopyAnswer_t)dlsym(RTLD_DEFAULT, "MGCopyAnswer");
+        if (mg) {
+            MSHookFunction((void *)mg, (void *)hook_MGCopyAnswer, (void **)&orig_MGCopyAnswer);
+        }
 
         // UIDevice deviceInfoForKey: 私有方法
         MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"deviceInfoForKey:"),
