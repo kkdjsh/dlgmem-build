@@ -356,7 +356,6 @@ static void hook_AudioServicesPlaySystemSoundWithCompletion(SystemSoundID sid, v
 }
 
 static void doFishhook(void) {
-    struct rebinding { const char *name; void *replacement; void **replaced; };
     struct rebinding r1 = {"AudioServicesPlaySystemSound", (void*)hook_AudioServicesPlaySystemSound, (void**)&orig_AudioServicesPlaySystemSound};
     struct rebinding r2 = {"AudioServicesPlaySystemSoundWithCompletion", (void*)hook_AudioServicesPlaySystemSoundWithCompletion, (void**)&orig_AudioServicesPlaySystemSoundWithCompletion};
     struct rebinding arr[] = {r1, r2};
@@ -402,8 +401,6 @@ static CFTypeRef hook_MGCopyAnswer_fish(CFStringRef key) {
     if (!key) return orig_MGCopyAnswer(key);
     return orig_MGCopyAnswer(key);
 }
-
-static void doFishhook(void) { }
 
 #pragma mark - NSProcessInfo hooks
 
