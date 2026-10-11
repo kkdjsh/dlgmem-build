@@ -339,29 +339,6 @@ static int hook_sysctl_mib(int *name, u_int namelen, void *oldp, size_t *oldlenp
     return r;
 }
 
-#pragma mark - fishhook hook C 函数
-
-#import "fishhook.h"
-#import <AudioToolbox/AudioToolbox.h>
-
-static void (*orig_AudioServicesPlaySystemSound)(SystemSoundID);
-static void hook_AudioServicesPlaySystemSound(SystemSoundID sid) {
-    if (sid == 4095) return; // 屏蔽系统震动
-    orig_AudioServicesPlaySystemSound(sid);
-}
-static void (*orig_AudioServicesPlaySystemSoundWithCompletion)(SystemSoundID, void(^)(void));
-static void hook_AudioServicesPlaySystemSoundWithCompletion(SystemSoundID sid, void(^completion)(void)) {
-    if (sid == 4095) return;
-    orig_AudioServicesPlaySystemSoundWithCompletion(sid, completion);
-}
-
-static void doFishhook(void) {
-    struct rebinding r1 = {"AudioServicesPlaySystemSound", (void*)hook_AudioServicesPlaySystemSound, (void**)&orig_AudioServicesPlaySystemSound};
-    struct rebinding r2 = {"AudioServicesPlaySystemSoundWithCompletion", (void*)hook_AudioServicesPlaySystemSoundWithCompletion, (void**)&orig_AudioServicesPlaySystemSoundWithCompletion};
-    struct rebinding arr[] = {r1, r2};
-    rebind_symbols(arr, 2);
-}
-
 typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
 static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
 
@@ -509,31 +486,5 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("UIApplication"),
                         @selector(canOpenURL:),
                         (IMP)hook_canOpenURL, (IMP *)&orig_canOpenURL);
-
-        // 屏蔽震动：只hook触发方法，不hook生命周期(避免闪退)
-        for (NSString *cls in @[@"UIImpactFeedbackGenerator",
-                                @"UINotificationFeedbackGenerator",
-                                @"UISelectionFeedbackGenerator"]) {
-            Class c = objc_getClass(cls.UTF8String);
-            if (!c) continue;
-            for (NSString *sel in @[@"impactOccurred", @"notificationOccurred:",
-                                     @"selectionChanged"]) {
-                SEL s = NSSelectorFromString(sel);
-                if ([c instancesRespondToSelector:s]) {
-                    MSHookMessageEx(c, s, (IMP)hook_noop_void, NULL);
-                }
-            }
-        }
-        // 屏蔽老震动 UIDevice
-        Class dvc = objc_getClass("UIDevice");
-        if (dvc) {
-            for (NSString *sel in @[@"playInputClick", @"vibrate", @"_playVibration",
-                                      @"playVibrationPattern:"]) {
-                SEL s = NSSelectorFromString(sel);
-                if ([dvc instancesRespondToSelector:s]) {
-                    MSHookMessageEx(dvc, s, (IMP)hook_noop_void, NULL);
-                }
-            }
-        }
     }
 }
