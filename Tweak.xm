@@ -493,38 +493,30 @@ static void fly_init(void) {
                         @selector(canOpenURL:),
                         (IMP)hook_canOpenURL, (IMP *)&orig_canOpenURL);
 
-        // 屏蔽震动：hook 所有反馈生成器的触发方法
+        // 屏蔽震动：只hook触发方法，不hook生命周期(避免闪退)
         for (NSString *cls in @[@"UIImpactFeedbackGenerator",
                                 @"UINotificationFeedbackGenerator",
-                                @"UISelectionFeedbackGenerator",
-                                @"UIFeedbackGenerator",
-                                @"_UIFeedbackGeneratorEngine"]) {
+                                @"UISelectionFeedbackGenerator"]) {
             Class c = objc_getClass(cls.UTF8String);
             if (!c) continue;
-            for (NSString *sel in @[@"prepare", @"impactOccurred", @"notificationOccurred:",
-                                     @"selectionChanged", @"prepareWithGenerator:",
-                                     @"_playFeedback", @"_activate", @"deactivate"]) {
+            for (NSString *sel in @[@"impactOccurred", @"notificationOccurred:",
+                                     @"selectionChanged"]) {
                 SEL s = NSSelectorFromString(sel);
                 if ([c instancesRespondToSelector:s]) {
                     MSHookMessageEx(c, s, (IMP)hook_noop_void, NULL);
                 }
             }
         }
-        // 屏蔽老震动
+        // 屏蔽老震动 UIDevice
         Class dvc = objc_getClass("UIDevice");
         if (dvc) {
             for (NSString *sel in @[@"playInputClick", @"vibrate", @"_playVibration",
-                                      @"setVibrationEnabled:", @"playVibrationPattern:"]) {
+                                      @"playVibrationPattern:"]) {
                 SEL s = NSSelectorFromString(sel);
                 if ([dvc instancesRespondToSelector:s]) {
                     MSHookMessageEx(dvc, s, (IMP)hook_noop_void, NULL);
                 }
             }
-        }
-        // 屏蔽通知震动
-        Class ns = objc_getClass("UNNotificationSound");
-        if (ns) {
-            MSHookMessageEx(ns, @selector(defaultSound), (IMP)hook_noop_nil, NULL);
         }
     }
 }
