@@ -339,9 +339,29 @@ static int hook_sysctl_mib(int *name, u_int namelen, void *oldp, size_t *oldlenp
     return r;
 }
 
-#pragma mark - fishhook hook C 函数（已禁用）
+#pragma mark - fishhook hook C 函数
 
-// #import "fishhook.h"
+#import "fishhook.h"
+#import <AudioToolbox/AudioToolbox.h>
+
+static void (*orig_AudioServicesPlaySystemSound)(SystemSoundID);
+static void hook_AudioServicesPlaySystemSound(SystemSoundID sid) {
+    if (sid == 4095) return; // 屏蔽系统震动
+    orig_AudioServicesPlaySystemSound(sid);
+}
+static void (*orig_AudioServicesPlaySystemSoundWithCompletion)(SystemSoundID, void(^)(void));
+static void hook_AudioServicesPlaySystemSoundWithCompletion(SystemSoundID sid, void(^completion)(void)) {
+    if (sid == 4095) return;
+    orig_AudioServicesPlaySystemSoundWithCompletion(sid, completion);
+}
+
+static void doFishhook(void) {
+    struct rebinding { const char *name; void *replacement; void **replaced; };
+    struct rebinding r1 = {"AudioServicesPlaySystemSound", (void*)hook_AudioServicesPlaySystemSound, (void**)&orig_AudioServicesPlaySystemSound};
+    struct rebinding r2 = {"AudioServicesPlaySystemSoundWithCompletion", (void*)hook_AudioServicesPlaySystemSoundWithCompletion, (void**)&orig_AudioServicesPlaySystemSoundWithCompletion};
+    struct rebinding arr[] = {r1, r2};
+    rebind_symbols(arr, 2);
+}
 
 typedef CFTypeRef (*MGCopyAnswer_t)(CFStringRef);
 static MGCopyAnswer_t orig_MGCopyAnswer = NULL;
@@ -470,7 +490,7 @@ static void fly_init(void) {
         MSHookMessageEx(objc_getClass("UIDevice"), NSSelectorFromString(@"hardwareMachine"),
                         (IMP)hook_hwMachine, (IMP *)&orig_hwMachine);
 
-        // doFishhook();
+        doFishhook();
 
         // NSProcessInfo
         MSHookMessageEx(objc_getClass("NSProcessInfo"),
