@@ -124,17 +124,51 @@ static void wipeAppData(void) {
     NSString *home = NSHomeDirectory();
     NSFileManager *fm = [NSFileManager defaultManager];
     goatLog([NSString stringWithFormat:@"home=%@", home]);
-    // 列出home目录下所有内容，逐个删除（保留GOAT自己的profile文件）
     NSString *goatFile = profilePath();
     goatLog([NSString stringWithFormat:@"goatFile=%@", goatFile]);
-    for (NSString *f in [fm contentsOfDirectoryAtPath:home error:nil]) {
-        NSString *full = [home stringByAppendingPathComponent:f];
-        if ([full isEqualToString:goatFile]) { goatLog([NSString stringWithFormat:@"skip %@", f]); continue; }
-        NSError *err = nil;
-        [fm removeItemAtPath:full error:&err];
-        if (err) goatLog([NSString stringWithFormat:@"del FAIL %@: %@", f, err.localizedDescription]);
-        else goatLog([NSString stringWithFormat:@"del OK %@", f]);
+
+    // 递归删除目录内所有内容（保留目录本身）
+    void (^wipeDir)(NSString*) = ^(NSString *dir) {
+        NSArray *items = [fm contentsOfDirectoryAtPath:dir error:nil];
+        for (NSString *f in items) {
+            NSString *full = [dir stringByAppendingPathComponent:f];
+            if ([full isEqualToString:goatFile]) { goatLog([NSString stringWithFormat:@"skip %@", f]); continue; }
+            NSError *err = nil;
+            BOOL isDir = NO;
+            [fm fileExistsAtPath:full isDirectory:&isDir];
+            if (isDir) {
+                wipeDir(full); // 先清子目录
+                [fm removeItemAtPath:full error:&err]; // 再删空目录
+            } else {
+                [fm removeItemAtPath:full error:&err];
+            }
+            if (err) goatLog([NSString stringWithFormat:@"del FAIL %@: %@", f, err.localizedDescription]);
+            else goatLog([NSString stringWithFormat:@"del OK %@", f]);
+        }
+    };
+
+    // 逐个删除各目录内容（不删目录本身）
+    for (NSString *sub in @[@"Documents", @"Library/Caches", @"Library/Application Support",
+                            @"Library/Preferences", @"Library/WebKit", @"Library/HTTPStorages",
+                            @"tmp", @"SystemData"]) {
+        NSString *dir = [home stringByAppendingPathComponent:sub];
+        if ([fm fileExistsAtPath:dir]) {
+            goatLog([NSString stringWithFormat:@"wiping %@", sub]);
+            wipeDir(dir);
+        }
     }
+    // Library根目录下的散文件
+    NSString *lib = [home stringByAppendingPathComponent:@"Library"];
+    for (NSString *f in [fm contentsOfDirectoryAtPath:lib error:nil]) {
+        NSString *full = [lib stringByAppendingPathComponent:f];
+        BOOL isDir = NO;
+        [fm fileExistsAtPath:full isDirectory:&isDir];
+        if (!isDir && ![full isEqualToString:goatFile]) {
+            [fm removeItemAtPath:full error:nil];
+            goatLog([NSString stringWithFormat:@"del Library/%@", f]);
+        }
+    }
+
     // NSUserDefaults 强制清
     NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
     [[NSUserDefaults standardUserDefaults] removePersistentDomainForName:bid];
