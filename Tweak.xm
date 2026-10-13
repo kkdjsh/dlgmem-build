@@ -8,6 +8,7 @@
 #import <objc/runtime.h>
 #import <substrate.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <dlfcn.h>
 
