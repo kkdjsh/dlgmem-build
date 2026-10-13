@@ -64,6 +64,8 @@ static void pickRandomProfile(void) {
     gFake = kProfiles[i];
     gFakeIDFV = [NSUUID UUID];
     gFakeDevName = [NSString stringWithUTF8String:kDeviceNames[rand() % kDeviceNameCount]];
+    NSLog(@"[GOAT] picked profile %d: machine=%@ IDFV=%@", i,
+          [NSString stringWithUTF8String:gFake.machine], gFakeIDFV.UUIDString);
 }
 
 static void loadSavedProfile(void) {
@@ -108,19 +110,23 @@ static void showHUD(void) {
 static void wipeAppData(void) {
     NSString *home = NSHomeDirectory();
     NSFileManager *fm = [NSFileManager defaultManager];
+    NSLog(@"[GOAT] home=%@", home);
     // 列出home目录下所有内容，逐个删除（保留GOAT自己的profile文件）
     NSString *goatFile = profilePath();
+    NSLog(@"[GOAT] goatFile=%@", goatFile);
     for (NSString *f in [fm contentsOfDirectoryAtPath:home error:nil]) {
         NSString *full = [home stringByAppendingPathComponent:f];
-        if ([full isEqualToString:goatFile]) continue; // 保留GOAT配置
+        if ([full isEqualToString:goatFile]) { NSLog(@"[GOAT] skip %@", f); continue; }
         NSError *err = nil;
         [fm removeItemAtPath:full error:&err];
-        if (err) NSLog(@"[GOAT] del fail %@: %@", f, err);
+        if (err) NSLog(@"[GOAT] del FAIL %@: %@", f, err.localizedDescription);
+        else NSLog(@"[GOAT] del OK %@", f);
     }
     // NSUserDefaults 强制清
     NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
     [[NSUserDefaults standardUserDefaults] removePersistentDomainForName:bid];
     [[NSUserDefaults standardUserDefaults] synchronize];
+    NSLog(@"[GOAT] NSUserDefaults cleared for %@", bid);
     // iCloud KVS
     NSUbiquitousKeyValueStore *i = [NSUbiquitousKeyValueStore defaultStore];
     for (NSString *k in [i dictionaryRepresentation].allKeys) [i removeObjectForKey:k];
@@ -135,7 +141,8 @@ static void wipeAppData(void) {
                            (__bridge id)kSecClassCertificate,
                            (__bridge id)kSecClassKey,
                            (__bridge id)kSecClassIdentity]) {
-        SecItemDelete((__bridge CFDictionaryRef)@{(__bridge id)kSecClass: sc});
+        OSStatus s = SecItemDelete((__bridge CFDictionaryRef)@{(__bridge id)kSecClass: sc});
+        NSLog(@"[GOAT] keychain class=%@ status=%d", sc, s);
     }
 }
 
@@ -438,6 +445,10 @@ static void fly_init(void) {
         // 启动时读取上次保存的设备档案，不随机换
         srand((unsigned)time(nil));
         loadSavedProfile();
+        NSLog(@"[GOAT] boot: machine=%@ model=%@ IDFV=%@ devName=%@",
+              [NSString stringWithUTF8String:gFake.machine],
+              [NSString stringWithUTF8String:gFake.modelName],
+              gFakeIDFV.UUIDString, gFakeDevName);
 
         MSHookMessageEx(objc_getClass("UIViewController"),
                         @selector(viewDidAppear:),
