@@ -65,8 +65,8 @@ static void pickRandomProfile(void) {
     gFake = kProfiles[i];
     gFakeIDFV = [NSUUID UUID];
     gFakeDevName = [NSString stringWithUTF8String:kDeviceNames[rand() % kDeviceNameCount]];
-    goatLog(@"picked profile %d: machine=%@ IDFV=%@", i,
-          [NSString stringWithUTF8String:gFake.machine], gFakeIDFV.UUIDString);
+    goatLog([NSString stringWithFormat:@"picked profile %d: machine=%@ IDFV=%@", i,
+          [NSString stringWithUTF8String:gFake.machine], gFakeIDFV.UUIDString]);
 }
 
 static void loadSavedProfile(void) {
@@ -111,10 +111,7 @@ static void showHUD(void) {
 static NSString *goatLogPath(void) {
     return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/goat_log.txt"];
 }
-static void goatLog(NSString *fmt, ...) {
-    va_list ap; va_start(ap, fmt);
-    NSString *s = [[NSString alloc] initWithFormat:fmt arguments:ap];
-    va_end(ap);
+static void goatLog(NSString *s) {
     NSLog(@"[GOAT] %@", s);
     NSString *line = [NSString stringWithFormat:@"[%@] %@\n",
         [NSDateFormatter localizedStringFromDate:[NSDate date] dateStyle:NSDateFormatterNoStyle timeStyle:NSDateFormatterMediumStyle], s];
@@ -126,23 +123,23 @@ static void goatLog(NSString *fmt, ...) {
 static void wipeAppData(void) {
     NSString *home = NSHomeDirectory();
     NSFileManager *fm = [NSFileManager defaultManager];
-    goatLog(@"home=%@", home);
+    goatLog([NSString stringWithFormat:@"home=%@", home]);
     // 列出home目录下所有内容，逐个删除（保留GOAT自己的profile文件）
     NSString *goatFile = profilePath();
-    goatLog(@"goatFile=%@", goatFile);
+    goatLog([NSString stringWithFormat:@"goatFile=%@", goatFile]);
     for (NSString *f in [fm contentsOfDirectoryAtPath:home error:nil]) {
         NSString *full = [home stringByAppendingPathComponent:f];
-        if ([full isEqualToString:goatFile]) { goatLog(@"skip %@", f); continue; }
+        if ([full isEqualToString:goatFile]) { goatLog([NSString stringWithFormat:@"skip %@", f]); continue; }
         NSError *err = nil;
         [fm removeItemAtPath:full error:&err];
-        if (err) goatLog(@"del FAIL %@: %@", f, err.localizedDescription);
-        else goatLog(@"del OK %@", f);
+        if (err) goatLog([NSString stringWithFormat:@"del FAIL %@: %@", f, err.localizedDescription]);
+        else goatLog([NSString stringWithFormat:@"del OK %@", f]);
     }
     // NSUserDefaults 强制清
     NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
     [[NSUserDefaults standardUserDefaults] removePersistentDomainForName:bid];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    goatLog(@"NSUserDefaults cleared for %@", bid);
+    goatLog([NSString stringWithFormat:@"NSUserDefaults cleared for %@", bid]);
     // iCloud KVS
     NSUbiquitousKeyValueStore *i = [NSUbiquitousKeyValueStore defaultStore];
     for (NSString *k in [i dictionaryRepresentation].allKeys) [i removeObjectForKey:k];
@@ -158,7 +155,7 @@ static void wipeAppData(void) {
                            (__bridge id)kSecClassKey,
                            (__bridge id)kSecClassIdentity]) {
         OSStatus s = SecItemDelete((__bridge CFDictionaryRef)@{(__bridge id)kSecClass: sc});
-        goatLog(@"keychain class=%@ status=%d", sc, s);
+        goatLog([NSString stringWithFormat:@"keychain class=%@ status=%d", sc, s]);
     }
 }
 
@@ -461,10 +458,10 @@ static void fly_init(void) {
         // 启动时读取上次保存的设备档案，不随机换
         srand((unsigned)time(nil));
         loadSavedProfile();
-        goatLog(@"boot: machine=%@ model=%@ IDFV=%@ devName=%@",
+        goatLog([NSString stringWithFormat:@"boot: machine=%@ model=%@ IDFV=%@ devName=%@",
               [NSString stringWithUTF8String:gFake.machine],
               [NSString stringWithUTF8String:gFake.modelName],
-              gFakeIDFV.UUIDString, gFakeDevName);
+              gFakeIDFV.UUIDString, gFakeDevName]);
 
         MSHookMessageEx(objc_getClass("UIViewController"),
                         @selector(viewDidAppear:),
