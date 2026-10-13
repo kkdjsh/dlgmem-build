@@ -59,6 +59,18 @@ static void saveProfileIndex(int i) {
     [[@(i) stringValue] writeToFile:profilePath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 
+static NSString *goatLogPath(void) {
+    return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/goat_log.txt"];
+}
+static void goatLog(NSString *s) {
+    NSLog(@"[GOAT] %@", s);
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n",
+        [NSDateFormatter localizedStringFromDate:[NSDate date] dateStyle:NSDateFormatterNoStyle timeStyle:NSDateFormatterMediumStyle], s];
+    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:goatLogPath()];
+    if (h) { [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile]; }
+    else { [line writeToFile:goatLogPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]; }
+}
+
 static void pickRandomProfile(void) {
     int i = rand() % kProfileCount;
     saveProfileIndex(i);
@@ -107,18 +119,6 @@ static void showHUD(void) {
 }
 
 #pragma mark - 一键新机：清数据
-
-static NSString *goatLogPath(void) {
-    return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/goat_log.txt"];
-}
-static void goatLog(NSString *s) {
-    NSLog(@"[GOAT] %@", s);
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n",
-        [NSDateFormatter localizedStringFromDate:[NSDate date] dateStyle:NSDateFormatterNoStyle timeStyle:NSDateFormatterMediumStyle], s];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:goatLogPath()];
-    if (h) { [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile]; }
-    else { [line writeToFile:goatLogPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]; }
-}
 
 static void wipeAppData(void) {
     NSString *home = NSHomeDirectory();
