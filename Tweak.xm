@@ -8,7 +8,6 @@
 #import <objc/runtime.h>
 #import <substrate.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 #include <dlfcn.h>
 
@@ -59,26 +58,14 @@ static void saveProfileIndex(int i) {
     [[@(i) stringValue] writeToFile:profilePath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 
-static NSString *goatLogPath(void) {
-    return [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/goat_log.txt"];
-}
-static void goatLog(NSString *s) {
-    NSLog(@"[GOAT] %@", s);
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n",
-        [NSDateFormatter localizedStringFromDate:[NSDate date] dateStyle:NSDateFormatterNoStyle timeStyle:NSDateFormatterMediumStyle], s];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:goatLogPath()];
-    if (h) { [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile]; }
-    else { [line writeToFile:goatLogPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]; }
-}
-
 static void pickRandomProfile(void) {
     int i = rand() % kProfileCount;
     saveProfileIndex(i);
     gFake = kProfiles[i];
     gFakeIDFV = [NSUUID UUID];
     gFakeDevName = [NSString stringWithUTF8String:kDeviceNames[rand() % kDeviceNameCount]];
-    goatLog([NSString stringWithFormat:@"picked profile %d: machine=%@ IDFV=%@", i,
-          [NSString stringWithUTF8String:gFake.machine], gFakeIDFV.UUIDString]);
+    NSLog(@"[GOAT] picked profile %d: machine=%@ IDFV=%@", i,
+          [NSString stringWithUTF8String:gFake.machine], gFakeIDFV.UUIDString);
 }
 
 static void loadSavedProfile(void) {
@@ -123,57 +110,23 @@ static void showHUD(void) {
 static void wipeAppData(void) {
     NSString *home = NSHomeDirectory();
     NSFileManager *fm = [NSFileManager defaultManager];
-    goatLog([NSString stringWithFormat:@"home=%@", home]);
+    NSLog(@"[GOAT] home=%@", home);
+    // 列出home目录下所有内容，逐个删除（保留GOAT自己的profile文件）
     NSString *goatFile = profilePath();
-    goatLog([NSString stringWithFormat:@"goatFile=%@", goatFile]);
-
-    // 递归删除目录内所有内容（保留目录本身）
-    void (^wipeDir)(NSString*) = ^(NSString *dir) {
-        NSArray *items = [fm contentsOfDirectoryAtPath:dir error:nil];
-        for (NSString *f in items) {
-            NSString *full = [dir stringByAppendingPathComponent:f];
-            if ([full isEqualToString:goatFile]) { goatLog([NSString stringWithFormat:@"skip %@", f]); continue; }
-            NSError *err = nil;
-            BOOL isDir = NO;
-            [fm fileExistsAtPath:full isDirectory:&isDir];
-            if (isDir) {
-                wipeDir(full); // 先清子目录
-                [fm removeItemAtPath:full error:&err]; // 再删空目录
-            } else {
-                [fm removeItemAtPath:full error:&err];
-            }
-            if (err) goatLog([NSString stringWithFormat:@"del FAIL %@: %@", f, err.localizedDescription]);
-            else goatLog([NSString stringWithFormat:@"del OK %@", f]);
-        }
-    };
-
-    // 逐个删除各目录内容（不删目录本身）
-    for (NSString *sub in @[@"Documents", @"Library/Caches", @"Library/Application Support",
-                            @"Library/Preferences", @"Library/WebKit", @"Library/HTTPStorages",
-                            @"tmp", @"SystemData"]) {
-        NSString *dir = [home stringByAppendingPathComponent:sub];
-        if ([fm fileExistsAtPath:dir]) {
-            goatLog([NSString stringWithFormat:@"wiping %@", sub]);
-            wipeDir(dir);
-        }
+    NSLog(@"[GOAT] goatFile=%@", goatFile);
+    for (NSString *f in [fm contentsOfDirectoryAtPath:home error:nil]) {
+        NSString *full = [home stringByAppendingPathComponent:f];
+        if ([full isEqualToString:goatFile]) { NSLog(@"[GOAT] skip %@", f); continue; }
+        NSError *err = nil;
+        [fm removeItemAtPath:full error:&err];
+        if (err) NSLog(@"[GOAT] del FAIL %@: %@", f, err.localizedDescription);
+        else NSLog(@"[GOAT] del OK %@", f);
     }
-    // Library根目录下的散文件
-    NSString *lib = [home stringByAppendingPathComponent:@"Library"];
-    for (NSString *f in [fm contentsOfDirectoryAtPath:lib error:nil]) {
-        NSString *full = [lib stringByAppendingPathComponent:f];
-        BOOL isDir = NO;
-        [fm fileExistsAtPath:full isDirectory:&isDir];
-        if (!isDir && ![full isEqualToString:goatFile]) {
-            [fm removeItemAtPath:full error:nil];
-            goatLog([NSString stringWithFormat:@"del Library/%@", f]);
-        }
-    }
-
     // NSUserDefaults 强制清
     NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
     [[NSUserDefaults standardUserDefaults] removePersistentDomainForName:bid];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    goatLog([NSString stringWithFormat:@"NSUserDefaults cleared for %@", bid]);
+    NSLog(@"[GOAT] NSUserDefaults cleared for %@", bid);
     // iCloud KVS
     NSUbiquitousKeyValueStore *i = [NSUbiquitousKeyValueStore defaultStore];
     for (NSString *k in [i dictionaryRepresentation].allKeys) [i removeObjectForKey:k];
@@ -189,7 +142,7 @@ static void wipeAppData(void) {
                            (__bridge id)kSecClassKey,
                            (__bridge id)kSecClassIdentity]) {
         OSStatus s = SecItemDelete((__bridge CFDictionaryRef)@{(__bridge id)kSecClass: sc});
-        goatLog([NSString stringWithFormat:@"keychain class=%@ status=%d", sc, s]);
+        NSLog(@"[GOAT] keychain class=%@ status=%d", sc, s);
     }
 }
 
@@ -492,10 +445,10 @@ static void fly_init(void) {
         // 启动时读取上次保存的设备档案，不随机换
         srand((unsigned)time(nil));
         loadSavedProfile();
-        goatLog([NSString stringWithFormat:@"boot: machine=%@ model=%@ IDFV=%@ devName=%@",
+        NSLog(@"[GOAT] boot: machine=%@ model=%@ IDFV=%@ devName=%@",
               [NSString stringWithUTF8String:gFake.machine],
               [NSString stringWithUTF8String:gFake.modelName],
-              gFakeIDFV.UUIDString, gFakeDevName]);
+              gFakeIDFV.UUIDString, gFakeDevName);
 
         MSHookMessageEx(objc_getClass("UIViewController"),
                         @selector(viewDidAppear:),
