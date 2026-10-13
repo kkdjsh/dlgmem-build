@@ -108,23 +108,16 @@ static void showHUD(void) {
 static void wipeAppData(void) {
     NSString *home = NSHomeDirectory();
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSArray *dirs = @[
-        [home stringByAppendingPathComponent:@"Documents"],
-        [home stringByAppendingPathComponent:@"Library/Caches"],
-        [home stringByAppendingPathComponent:@"Library/Application Support"],
-        NSTemporaryDirectory()
-    ];
-    for (NSString *d in dirs) {
-        for (NSString *f in [fm contentsOfDirectoryAtPath:d error:nil]) {
-            [fm removeItemAtPath:[d stringByAppendingPathComponent:f] error:nil];
-        }
+    // 列出home目录下所有内容，逐个删除（保留GOAT自己的profile文件）
+    NSString *goatFile = profilePath();
+    for (NSString *f in [fm contentsOfDirectoryAtPath:home error:nil]) {
+        NSString *full = [home stringByAppendingPathComponent:f];
+        if ([full isEqualToString:goatFile]) continue; // 保留GOAT配置
+        NSError *err = nil;
+        [fm removeItemAtPath:full error:&err];
+        if (err) NSLog(@"[GOAT] del fail %@: %@", f, err);
     }
-    // Preferences plist
-    NSString *prefs = [home stringByAppendingPathComponent:@"Library/Preferences"];
-    for (NSString *f in [fm contentsOfDirectoryAtPath:prefs error:nil]) {
-        if ([f hasSuffix:@".plist"]) [fm removeItemAtPath:[prefs stringByAppendingPathComponent:f] error:nil];
-    }
-    // NSUserDefaults
+    // NSUserDefaults 强制清
     NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
     [[NSUserDefaults standardUserDefaults] removePersistentDomainForName:bid];
     [[NSUserDefaults standardUserDefaults] synchronize];
@@ -136,7 +129,7 @@ static void wipeAppData(void) {
     NSHTTPCookieStorage *jar = [NSHTTPCookieStorage sharedHTTPCookieStorage];
     for (NSHTTPCookie *c in jar.cookies) [jar deleteCookie:c];
     [[NSURLCache sharedURLCache] removeAllCachedResponses];
-    // Keychain 全清
+    // Keychain 全清（带空匹配）
     for (NSString *sc in @[(__bridge id)kSecClassGenericPassword,
                            (__bridge id)kSecClassInternetPassword,
                            (__bridge id)kSecClassCertificate,
